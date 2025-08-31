@@ -1,203 +1,148 @@
-org 100h
+.MODEL SMALL
+.STACK 100h
 
-.data
-    ; Messages
-    prompt      db 'Enter input: $'
-    msg_num     db 0Dh,0Ah,'Result: NUMBER - $'
-    msg_pos     db 'POSITIVE$'
-    msg_neg     db 'NEGATIVE$' 
-    msg_zero    db 'ZERO$'
-    msg_txt     db 0Dh,0Ah,'Result: TEXT - Length: $'
-    msg_chars   db ' characters$'
+.DATA
+    input_buffer    DB 80, 0, 81 DUP(?)
     
-    ; Input buffer
-    buffer      db 100, 0, 100 dup(0)
+    prompt_msg      DB 'Enter input (max 80 chars): $'
+    number_pos_msg  DB 0Dh, 0Ah, 'Result: Positive number$'
+    number_neg_msg  DB 0Dh, 0Ah, 'Result: Negative number$'
+    string_part1_msg DB 0Dh, 0Ah, 'Result: String with $'
+    string_part2_msg DB ' word(s)$'
+    empty_msg       DB 0Dh, 0Ah, 'Error: Empty input$'
+    
+    num_buffer      DB 6 DUP('$')
+    
+    word_count      DW 0
+    is_number       DB 1
+    is_negative     DB 0
 
-.code
-main proc
-    mov ax, @data
-    mov ds, ax
+.CODE
+MAIN PROC
+    MOV AX, @DATA
+    MOV DS, AX
     
-    ; Get input
-    lea dx, prompt
-    mov ah, 09h
-    int 21h
+    LEA DX, prompt_msg
+    MOV AH, 09h
+    INT 21h
     
-    lea dx, buffer
-    mov ah, 0Ah
-    int 21h
+    LEA DX, input_buffer
+    MOV AH, 0Ah
+    INT 21h
     
-    ; Analyze input
-    call analyze
+    LEA SI, input_buffer[2]
+    MOV CL, input_buffer[1]
+    MOV CH, 0
     
-    ; Exit
-    mov ah, 4ch
-    int 21h
-main endp
+    CMP CX, 0
+    JE show_empty
+    
+    MOV BH, 0
+    
+    MOV AL, [SI]
+    CMP AL, '-'
+    JNE analysis_loop
+    
+    MOV is_negative, 1
+    INC SI
+    DEC CX
+    CMP CX, 0
+    JE not_a_number
 
-analyze proc
-    mov cl, buffer[1]        ; Length
-    lea si, buffer[2]        ; First char
-    
-    ; Check if number
-    call is_number
-    cmp al, 1
-    je handle_number
-    
-    ; Handle text
-    lea dx, msg_txt
-    mov ah, 09h
-    int 21h
-    
-    mov al, cl
-    call print_digit
-    
-    lea dx, msg_chars
-    mov ah, 09h
-    int 21h
-    ret
-    
-handle_number:
-    lea dx, msg_num
-    mov ah, 09h
-    int 21h
-    
-    ; Check sign
-    mov al, [si]
-    cmp al, '-'
-    je print_negative
-    
-    ; Check if zero
-    call is_zero
-    cmp al, 1
-    je print_zero
-    
-    lea dx, msg_pos
-    mov ah, 09h
-    int 21h
-    ret
-    
-print_negative:
-    lea dx, msg_neg
-    mov ah, 09h
-    int 21h
-    ret
-    
-print_zero:
-    lea dx, msg_zero
-    mov ah, 09h
-    int 21h
-    ret
-analyze endp
+analysis_loop:
+    CMP CX, 0
+    JE end_analysis
 
-; Check if input is number
-is_number proc
-    push si
-    push cx
-    
-    mov al, [si]
-    cmp al, '-'
-    je skip_minus
-    cmp al, '+'
-    je skip_plus
-    jmp check_digits
-    
-skip_minus:
-skip_plus:
-    inc si
-    dec cl
-    
-check_digits:
-    cmp cl, 0
-    je not_number
-    
-digit_loop:
-    mov al, [si]
-    cmp al, '0'
-    jb not_number
-    cmp al, '9'
-    ja not_number
-    inc si
-    dec cl
-    jnz digit_loop
-    
-    pop cx
-    pop si
-    mov al, 1                ; Is number
-    ret
-    
-not_number:
-    pop cx
-    pop si
-    mov al, 0                ; Not number
-    ret
-is_number endp
+    MOV AL, [SI]
 
-; Check if number is zero
-is_zero proc
-    push si
-    push cx
-    
-    ; Skip sign
-    mov al, [si]
-    cmp al, '-'
-    je skip_sign
-    cmp al, '+'
-    je skip_sign
-    jmp check_zero_digits
-    
-skip_sign:
-    inc si
-    dec cl
-    
-check_zero_digits:
-zero_loop:
-    mov al, [si]
-    cmp al, '0'
-    jne not_zero
-    inc si
-    dec cl
-    jnz zero_loop
-    
-    pop cx
-    pop si
-    mov al, 1                ; Is zero
-    ret
-    
-not_zero:
-    pop cx
-    pop si
-    mov al, 0                ; Not zero
-    ret
-is_zero endp
+    CMP AL, ' '
+    JNE not_a_space
+    MOV BH, 0
+    JMP check_if_digit
+not_a_space:
+    CMP BH, 0
+    JNE check_if_digit
+    MOV BH, 1
+    INC word_count
 
-; Print single digit (0-255)
-print_digit proc
-    push ax
-    push dx
+check_if_digit:
+    CMP AL, '0'
+    JB not_a_number
+    CMP AL, '9'
+    JA not_a_number
     
-    mov ah, 0
-    mov dl, 10
-    div dl
-    
-    cmp al, 0
-    je print_ones
-    
-    add al, '0'
-    mov dl, al
-    mov ah, 02h
-    int 21h
-    
-print_ones:
-    mov al, ah
-    add al, '0'
-    mov dl, al
-    mov ah, 02h
-    int 21h
-    
-    pop dx
-    pop ax
-    ret
-print_digit endp
+continue_loop:
+    INC SI
+    DEC CX
+    JMP analysis_loop
 
-end main
+not_a_number:
+    MOV is_number, 0
+    JMP continue_loop
+
+end_analysis:
+    
+    CMP is_number, 1
+    JE process_as_number
+    
+    LEA DX, string_part1_msg
+    MOV AH, 09h
+    INT 21h
+    
+    CALL display_word_count
+    
+    LEA DX, string_part2_msg
+    MOV AH, 09h
+    INT 21h
+    JMP exit_program
+
+process_as_number:
+    CMP is_negative, 1
+    JE show_negative
+    LEA DX, number_pos_msg
+    JMP show_result
+show_negative:
+    LEA DX, number_neg_msg
+    JMP show_result
+
+show_empty:
+    LEA DX, empty_msg
+
+show_result:
+    MOV AH, 09h
+    INT 21h
+
+exit_program:
+    MOV AH, 4Ch
+    INT 21h
+
+MAIN ENDP
+
+display_word_count PROC
+    MOV AX, word_count
+    LEA DI, num_buffer + 4
+    MOV BX, 10
+    
+    CMP AX, 0
+    JNE conversion_loop
+    MOV BYTE PTR [DI], '0'
+    JMP print_number_buffer
+    
+conversion_loop:
+    MOV DX, 0
+    DIV BX
+    ADD DL, '0'
+    MOV [DI], DL
+    DEC DI
+    CMP AX, 0
+    JNE conversion_loop
+    
+print_number_buffer:
+    INC DI
+    LEA DX, DI
+    MOV AH, 09h
+    INT 21h
+    RET
+display_word_count ENDP
+
+END MAIN
