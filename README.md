@@ -1,4 +1,4 @@
-* a college project for Assembly language
+* a college project for "Machine and Assembly language" course.
 * This project is written in assembly language. The program first receives an input from the user and checks whether the given input is a number or a letter.
 
 * If the input is a number, it determines its type in terms of being positive or negative.
