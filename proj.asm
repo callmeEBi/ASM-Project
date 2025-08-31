@@ -1,6 +1,3 @@
-.MODEL SMALL
-.STACK 100h
-
 .DATA
     input_buffer    DB 80, 0, 81 DUP(?)
     
@@ -146,3 +143,4 @@ print_number_buffer:
 display_word_count ENDP
 
 END MAIN
+
